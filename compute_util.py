@@ -86,3 +86,8 @@ def get_zone_operation_status(operation_name: str) -> dict:
 def get_instance_status(instance_name: str) -> dict:
     compute = discovery.build('compute', 'v1')
     return compute.instances().get(project=PROJECT, zone=ZONE, instance=instance_name).execute()
+
+
+def get_serial_port_output(instance_name: str, port: int = 1) -> dict:
+    compute = discovery.build('compute', 'v1')
+    return compute.instances().getSerialPortOutput(project=PROJECT, zone=ZONE, instance=instance_name, port=port).execute()
