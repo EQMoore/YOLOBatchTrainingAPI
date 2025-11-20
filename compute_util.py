@@ -91,3 +91,22 @@ def get_instance_status(instance_name: str) -> dict:
 def get_serial_port_output(instance_name: str, port: int = 1) -> dict:
     compute = discovery.build('compute', 'v1')
     return compute.instances().getSerialPortOutput(project=PROJECT, zone=ZONE, instance=instance_name, port=port).execute()
+
+
+def delete_instance(instance_name: str) -> dict:
+    compute = discovery.build('compute', 'v1')
+    return compute.instances().delete(project=PROJECT, zone=ZONE, instance=instance_name).execute()
+
+
+def wait_for_instance_and_delete(instance_name: str, poll_interval: int = 15, timeout: int = 3600) -> dict:
+    import time
+    compute = discovery.build('compute', 'v1')
+    start = time.time()
+    while True:
+        inst = compute.instances().get(project=PROJECT, zone=ZONE, instance=instance_name).execute()
+        status = inst.get('status')
+        if status and status.upper() != 'RUNNING':
+            return compute.instances().delete(project=PROJECT, zone=ZONE, instance=instance_name).execute()
+        if time.time() - start > timeout:
+            raise TimeoutError('timeout waiting for instance state change')
+        time.sleep(poll_interval)
