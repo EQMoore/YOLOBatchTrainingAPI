@@ -1,0 +1,18 @@
+# Core training and export dependencies
+ultralytics
+torch
+torchvision
+pillow
+
+# ONNX export & quantization
+onnx
+onnxruntime
+onnxruntime-tools
+
+# GCS / GCP helpers
+google-cloud-storage
+google-api-python-client
+google-auth
+
+# Optional helpers
+ffmpeg-python

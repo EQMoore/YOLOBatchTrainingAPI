@@ -11,14 +11,14 @@ VERTEXT_CONTAINER_URI = os.getenv("VERTEXT_CONTAINER_URI")
 def get_user_models(user_id:str):
     client = storage.Client()
     bucket = client.bucket(BUCKET_NAME)
-    blobs = bucket.list_blobs(prefix=user_id, versions=True)
-    return blobs
+    blobs = list(bucket.list_blobs(prefix=user_id))
+    return [b.name for b in blobs]
 
-def check_gcs_unique_name(name:str):
+def check_gcs_unique_name(name: str):
     client = storage.Client()
     bucket = client.bucket(BUCKET_NAME)
-    blobs = bucket.list_blobs(prefix=name, versions=True)
-    return(blobs!=None)
+    blobs = list(bucket.list_blobs(prefix=name))
+    return len(blobs) > 0
 
 def upload_to_gcs(local_path: str, blob_path: str) -> str:
     client = storage.Client()
