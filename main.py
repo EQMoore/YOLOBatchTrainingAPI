@@ -2,10 +2,10 @@ import tempfile
 import shutil
 from fastapi import FastAPI, UploadFile, HTTPException
 from fastapi.responses import StreamingResponse
-import gcs_util
 import os
 import io
 from google.cloud import storage
+import gcs_util
 import compute_util
 
 app = FastAPI()
