@@ -6,7 +6,8 @@ from googleapiclient import discovery
 PROJECT = os.getenv("PROJECT_ID")
 ZONE = os.getenv("ZONE", "us-central1-a")
 BUCKET = os.getenv("BUCKET_NAME")
-CONTAINER_IMAGE = os.getenv("VERTEXT_CONTAINER_URI")
+CONTAINER_IMAGE = os.getenv("VERTEX_CONTAINER_URI")
+CONTAINER_IMAGE = os.getenv("VERTEX_CONTAINER_URI")
 
 
 def create_training_vm(dataset_gcs_path: str, model_name: str, epochs: int = 10, batch: int = 16, machine_type: str = "n1-standard-8") -> dict:

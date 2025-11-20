@@ -6,7 +6,7 @@ import os
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 PROJECT_ID = os.getenv("PROJECT_ID")
 REGION = os.getenv("REGION")
-VERTEXT_CONTAINER_URI = os.getenv("VERTEXT_CONTAINER_URI")
+VERTEX_CONTAINER_URI = os.getenv("VERTEXT_CONTAINER_URI")
 
 def get_user_models(user_id:str):
     client = storage.Client()
@@ -35,7 +35,7 @@ def submit_training_job(dataset_gcs_path: str, model_name: str, epochs: int, bat
 
     job = aiplatform.CustomContainerTrainingJob(
         display_name=job_id,
-        container_uri=os.getenv("VERTEXT_CONTAINER_URI")
+        container_uri=VERTEX_CONTAINER_URI
     )
     args = [
         f"--dataset_zip={dataset_gcs_path}",
