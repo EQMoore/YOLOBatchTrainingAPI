@@ -1,17 +1,18 @@
 import os
 from google.cloud import storage, aiplatform
 import uuid
+import os
 
-PROJECT_ID = "PROJECT_ID"
-BUCKET_NAME = "BUCKET_NAME"
-REGION = "us-central1"
-VERTEX_CONTAINER_URI = "us-docker.pkg.dev/YOUR_PROJECT_ID/yolo-trainer/yolo:latest"
+BUCKET_NAME = os.getenv("BUCKET_NAME")
+PROJECT_ID = os.getenv("PROJECT_ID")
+REGION = os.getenv("REGION")
+VERTEXT_CONTAINER_URI = os.getenv("VERTEXT_CONTAINER_URI")
 
 def get_user_models(user_id:str):
     client = storage.Client()
     bucket = client.bucket(BUCKET_NAME)
     blobs = bucket.list_blobs(prefix=user_id, versions=True)
-    return(blobs!=None)
+    return blobs
 
 def check_gcs_unique_name(name:str):
     client = storage.Client()
@@ -27,14 +28,14 @@ def upload_to_gcs(local_path: str, blob_path: str) -> str:
     return f"gs://{BUCKET_NAME}/{blob_path}"
 
 
-def submit_vertex_training_job(dataset_gcs_path: str, model_name: str, epochs: int, batch: int):
+def submit_training_job(dataset_gcs_path: str, model_name: str, epochs: int, batch: int):
     aiplatform.init(project=PROJECT_ID, location=REGION)
 
     job_id = f"yolo-train-{uuid.uuid4()}"
 
     job = aiplatform.CustomContainerTrainingJob(
         display_name=job_id,
-        container_uri=VERTEX_CONTAINER_URI,
+        container_uri=os.getenv("VERTEXT_CONTAINER_URI")
     )
     args = [
         f"--dataset_zip={dataset_gcs_path}",
