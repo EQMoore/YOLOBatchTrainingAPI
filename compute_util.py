@@ -9,7 +9,7 @@ BUCKET = os.getenv("BUCKET_NAME")
 CONTAINER_IMAGE = os.getenv("VERTEXT_CONTAINER_URI")
 
 
-def create_training_vm(dataset_gcs_path: str, model_name: str, epochs: int = 10, batch: int = 16, machine_type: str = "n1-standard-8") -> str:
+def create_training_vm(dataset_gcs_path: str, model_name: str, epochs: int = 10, batch: int = 16, machine_type: str = "n1-standard-8") -> dict:
     if not PROJECT:
         raise RuntimeError("PROJECT_ID environment variable not set")
     if not BUCKET:
@@ -21,17 +21,17 @@ def create_training_vm(dataset_gcs_path: str, model_name: str, epochs: int = 10,
 
     instance_name = f"yolo-trainer-{uuid.uuid4().hex[:8]}"
 
-    container_declaration = f"""
-spec:
-  containers:
-    - name: trainer
-      image: {CONTAINER_IMAGE}
-      env:
-        - name: BUCKET_NAME
-          value: "{BUCKET}"
-      args: ['--dataset_zip={dataset_gcs_path}','--model={model_name}','--epochs={epochs}','--batch={batch}']
-  restartPolicy: Never
-"""
+    container_declaration = (
+        "spec:\n"
+        "  containers:\n"
+        "    - name: trainer\n"
+        f"      image: {CONTAINER_IMAGE}\n"
+        "      env:\n"
+        "        - name: BUCKET_NAME\n"
+        f"          value: \"{BUCKET}\"\n"
+        f"      args: ['--dataset_zip={dataset_gcs_path}','--model={model_name}','--epochs={epochs}','--batch={batch}']\n"
+        "  restartPolicy: Never\n"
+    )
 
     machine_type_full = f"zones/{ZONE}/machineTypes/{machine_type}"
 
@@ -75,4 +75,14 @@ spec:
     response = request.execute()
 
     op_name = response.get('name')
-    return op_name
+    return {"operation": op_name, "instance": instance_name}
+
+
+def get_zone_operation_status(operation_name: str) -> dict:
+    compute = discovery.build('compute', 'v1')
+    return compute.zoneOperations().get(project=PROJECT, zone=ZONE, operation=operation_name).execute()
+
+
+def get_instance_status(instance_name: str) -> dict:
+    compute = discovery.build('compute', 'v1')
+    return compute.instances().get(project=PROJECT, zone=ZONE, instance=instance_name).execute()
