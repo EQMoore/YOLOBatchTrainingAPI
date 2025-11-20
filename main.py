@@ -1,8 +1,12 @@
 import tempfile
 import shutil
 from fastapi import FastAPI, UploadFile, HTTPException
+from fastapi.responses import StreamingResponse
 import gcs_util
 import os
+import io
+from google.cloud import storage
+import compute_util
 
 app = FastAPI()
 
@@ -44,3 +48,30 @@ def get_models(user_id: str):
 @app.get("/download_model")
 def download_model(user_id: str, model_name: str):
     return gcs_util.get_user_models(f"{user_id}/{model_name}")
+
+
+def stream_blob(bucket_name: str, blob_name: str):
+    client = storage.Client()
+    bucket = client.bucket(bucket_name)
+    blob = bucket.blob(blob_name)
+    if not blob.exists():
+        raise HTTPException(status_code=404, detail="Model not found")
+    stream = io.BytesIO()
+    blob.download_to_file(stream)
+    stream.seek(0)
+    return StreamingResponse(stream, media_type="application/octet-stream", headers={"Content-Disposition": f"attachment; filename={os.path.basename(blob_name)}"})
+
+
+@app.get("/job_status")
+def job_status(operation: str = None, instance: str = None):
+    if operation:
+        return compute_util.get_zone_operation_status(operation)
+    if instance:
+        return compute_util.get_instance_status(instance)
+    raise HTTPException(status_code=400, detail="Provide operation or instance")
+
+
+@app.get("/download_model_file")
+def download_model_file(user_id: str, model: str, artifact: str = "final_model.quant.onnx"):
+    blob_name = f"{user_id}/{model}/{artifact}"
+    return stream_blob(os.getenv("BUCKET_NAME"), blob_name)
