@@ -17,3 +17,5 @@ POST `/train_yolo` with form-data: `dataset` (file), `model` (string), optional 
 The API uploads the ZIP to `gs://{BUCKET_NAME}/{user_id}/{model}.zip` and calls `gcs_util.submit_training_job(...)`
 
 Vertex AI launches the container/VM. The container runs the trainer script. Then the trainer downloads the ZIP, extracts, trains, exports ONNX, quantizes, and uploads artifacts back to `gs://{BUCKET_NAME}/{user_id}/{model}/`
+
+TODO: Make the API listen for an gs upload and send a progress update to the user
