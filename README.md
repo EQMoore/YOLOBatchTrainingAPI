@@ -1,4 +1,4 @@
-Project: YOLO Training via API + VM/Container
+Project: YOLO Training via API that asigns a group of VM/Container's to train models for you
 
 A FastAPI app (`main.py`) accepts a dataset ZIP upload and a model name. It uploads the ZIP to GCS and submits a managed training job (Vertex AI CustomContainerTrainingJob) which runs the trainer inside a container/VM.
 
