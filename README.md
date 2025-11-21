@@ -10,7 +10,7 @@ Environment variables
 `REGION` - GCP region for Vertex AI
 `VERTEXT_CONTAINER_URI` - Container image URI to use for Vertex AI training job
 
-Logic Path:
+How to train a model with a post request
 
 POST `/train_yolo` with form-data: `dataset` (file), `model` (string), optional `epochs` and `batch`, `user_id`.
 
