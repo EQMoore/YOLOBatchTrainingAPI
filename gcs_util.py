@@ -6,7 +6,7 @@ import os
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 PROJECT_ID = os.getenv("PROJECT_ID")
 REGION = os.getenv("REGION")
-VERTEX_CONTAINER_URI = os.getenv("VERTEXT_CONTAINER_URI")
+VERTEX_CONTAINER_URI = os.getenv("VERTEX_CONTAINER_URI")
 
 def get_user_models(user_id:str):
     client = storage.Client()
