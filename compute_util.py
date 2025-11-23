@@ -16,7 +16,7 @@ def create_training_vm(dataset_gcs_path: str, model_name: str, epochs: int = 10,
     if not BUCKET:
         raise RuntimeError("BUCKET_NAME environment variable not set")
     if not CONTAINER_IMAGE:
-        raise RuntimeError("VERTEXT_CONTAINER_URI environment variable not set")
+        raise RuntimeError("VERTEX_CONTAINER_URI environment variable not set")
 
     compute = discovery.build('compute', 'v1')
 
