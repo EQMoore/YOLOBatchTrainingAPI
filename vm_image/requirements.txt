@@ -1,18 +1,16 @@
-# Core training and export dependencies
 ultralytics
 torch
 torchvision
 pillow
 
-# ONNX export & quantization
 onnx
 onnxruntime
 onnxruntime-tools
+onnxruntime.quantization
 
-# GCS / GCP helpers
 google-cloud-storage
+bigquery
 google-api-python-client
 google-auth
 
-# Optional helpers
 ffmpeg-python

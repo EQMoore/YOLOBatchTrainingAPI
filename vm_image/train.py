@@ -1,12 +1,13 @@
 import os
-from ultralytics import YOLO
+from ultralytics.models import YOLO
 import shutil
 
 def train(directory: str, dataset: str, epochs: int = 100, batch: int = 16):
     os.makedirs(directory, exist_ok=True)
+    
     model = YOLO("yolov8n.pt")
 
-    results = model.train(
+    model_results = model.train(
         data=os.path.join(dataset, 'dataset', 'data.yaml') if os.path.exists(os.path.join(dataset, 'dataset', 'data.yaml')) else os.path.join(dataset, 'dataset'),
         epochs=epochs,
         imgsz=640,
@@ -42,4 +43,4 @@ def train(directory: str, dataset: str, epochs: int = 100, batch: int = 16):
         except Exception as e:
             print(f"ONNX export/quantization failed: {e}")
 
-    return results
+    return model_results

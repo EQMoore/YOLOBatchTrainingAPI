@@ -1,7 +1,10 @@
 import os
 from google.cloud import storage
+from google.cloud import bigquery
 
-BUCKET_NAME = os.getenv("BUCKET_NAME")
+project_number = os.environ["CLOUD_ML_PROJECT_ID"]
+
+client = bigquery.Client(project=project_number)
 
 def _parse_gs_uri(gs_uri: str):
     if not gs_uri.startswith("gs://"):
@@ -19,9 +22,9 @@ def download_from_gcs(local_path: str, gs_uri: str) -> str:
     blob.download_to_filename(local_path)
     return local_path
 
-def upload_model(local_path: str, gs_uri: str) -> str:
+def upload_model(local_path: str) -> str:
     client = storage.Client()
-    bucket_name, blob_path = _parse_gs_uri(gs_uri)
+    bucket_name, blob_path = _parse_gs_uri(os.getenv('AIP_MODEL_DIR', 'error'))
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_path)
     blob.upload_from_filename(local_path)

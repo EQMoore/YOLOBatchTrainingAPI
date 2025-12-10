@@ -6,7 +6,7 @@ import os
 BUCKET_NAME = os.getenv("BUCKET_NAME")
 PROJECT_ID = os.getenv("PROJECT_ID")
 REGION = os.getenv("REGION")
-VERTEX_CONTAINER_URI = os.getenv("VERTEX_CONTAINER_URI")
+VERTEX_CONTAINER_URI = os.getenv("VERTEX_CONTAINER_URI", "default")
 
 def get_user_models(user_id:str):
     client = storage.Client()
@@ -27,7 +27,6 @@ def upload_to_gcs(local_path: str, blob_path: str) -> str:
     blob.upload_from_filename(local_path)
     return f"gs://{BUCKET_NAME}/{blob_path}"
 
-
 def submit_training_job(dataset_gcs_path: str, model_name: str, epochs: int, batch: int):
     aiplatform.init(project=PROJECT_ID, location=REGION)
 
@@ -46,7 +45,6 @@ def submit_training_job(dataset_gcs_path: str, model_name: str, epochs: int, bat
 
     job.run(
         args=args,
-        replica_count=1,
         machine_type="n1-standard-8",
         accelerator_type="NVIDIA_TESLA_T4",
         accelerator_count=1,

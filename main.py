@@ -63,7 +63,7 @@ def stream_blob(bucket_name: str, blob_name: str):
 
 
 @app.get("/job_status")
-def job_status(operation: str = None, instance: str = None):
+def job_status(operation: str, instance: str):
     if operation:
         return compute_util.get_zone_operation_status(operation)
     if instance:
@@ -74,4 +74,3 @@ def job_status(operation: str = None, instance: str = None):
 @app.get("/download_model_file")
 def download_model_file(user_id: str, model: str, artifact: str = "final_model.quant.onnx"):
     blob_name = f"{user_id}/{model}/{artifact}"
-    return stream_blob(os.getenv("BUCKET_NAME"), blob_name)
