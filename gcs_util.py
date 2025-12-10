@@ -29,11 +29,10 @@ def upload_to_gcs(local_path: str, blob_path: str) -> str:
 
 def submit_training_job(dataset_gcs_path: str, model_name: str, epochs: int, batch: int):
     aiplatform.init(project=PROJECT_ID, location=REGION)
-
     job_id = f"yolo-train-{uuid.uuid4()}"
 
     job = aiplatform.CustomContainerTrainingJob(
-        display_name=job_id,
+        display_name=model_name,
         container_uri=VERTEX_CONTAINER_URI
     )
     args = [

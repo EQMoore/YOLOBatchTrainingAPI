@@ -6,7 +6,6 @@ import os
 import io
 from google.cloud import storage
 import gcs_util
-import compute_util
 
 app = FastAPI()
 
@@ -29,10 +28,7 @@ def train_yolo(dataset: UploadFile, model: str, epochs: int = 10, batch: int = 1
 
         gcs_path = gcs_util.upload_to_gcs(temp_path, blob_path)
 
-        from compute_util import create_training_vm
-
-        job_id = create_training_vm(gcs_path, f"{user_id}/{model}", epochs, batch)
-        return {"job_id": job_id}
+        gcs_util.submit_training_job(blob_path, model, epochs, batch)
     finally:
         try:
             os.remove(temp_path)
@@ -60,15 +56,6 @@ def stream_blob(bucket_name: str, blob_name: str):
     blob.download_to_file(stream)
     stream.seek(0)
     return StreamingResponse(stream, media_type="application/octet-stream", headers={"Content-Disposition": f"attachment; filename={os.path.basename(blob_name)}"})
-
-
-@app.get("/job_status")
-def job_status(operation: str, instance: str):
-    if operation:
-        return compute_util.get_zone_operation_status(operation)
-    if instance:
-        return compute_util.get_instance_status(instance)
-    raise HTTPException(status_code=400, detail="Provide operation or instance")
 
 
 @app.get("/download_model_file")
