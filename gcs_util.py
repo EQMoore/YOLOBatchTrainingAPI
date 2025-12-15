@@ -38,8 +38,8 @@ def submit_training_job(dataset_gcs_path: str, model_name: str, epochs: int, bat
     args = [
         f"--dataset_zip={dataset_gcs_path}",
         f"--model={model_name}",
-        f"--epochs={epochs}",
-        f"--batch={batch}",
+        epochs,
+        batch
     ]
 
     job.run(

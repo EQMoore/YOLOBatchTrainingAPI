@@ -16,5 +16,6 @@ RUN pip install --upgrade pip \
     && pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
+EXPOSE 443
 
 ENTRYPOINT ["python", "vm_image/main.py"]

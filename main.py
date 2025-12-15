@@ -9,6 +9,7 @@ import gcs_util
 
 app = FastAPI()
 
+#http response codes: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
 
 @app.post("/train_yolo")
 def train_yolo(dataset: UploadFile, model: str, epochs: int = 10, batch: int = 16, user_id: str = "default"):
@@ -17,7 +18,6 @@ def train_yolo(dataset: UploadFile, model: str, epochs: int = 10, batch: int = 1
 
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_file:
         temp_path = temp_file.name
-        dataset.file.seek(0)
         shutil.copyfileobj(dataset.file, temp_file)
 
     try:

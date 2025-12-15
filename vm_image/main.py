@@ -17,7 +17,8 @@ def main():
     In all serverless training jobs, Vertex AI mounts Cloud Storage buckets that you have access to bin the /gcs/ 
     directory of each training node's file system. As a convenient alternative to using the Python Client for Cloud 
     Storage or another library to access Cloud Storage, you can read and write directly to the local file system in 
-    order to read data from Cloud Storage or write data to Cloud Storage.
+    order to read data from Cloud Storage or write data to Cloud Storage. Job might not need to upload back to gcs. 
+    Vertex is also integrated with google cloud ai hosting so I might save this container as a users cloud model.
     '''
     args = parser.parse_args()
 
@@ -48,7 +49,7 @@ def main():
                     quant_onx = os.path.join(work_dir, 'final_model.quant.onnx')
                     if os.path.exists(quant_onx):
                         out_blob = f"{args.model}/final_model.quant.onnx"
-                        #upload the quantized model to gcsß
+                        #upload the quantized model to gcs
                         trainer_gcs_util.upload_model(quant_onx)
                         
             #handle an error in the case that we can not extract the zip file because it is not a valid zip file
