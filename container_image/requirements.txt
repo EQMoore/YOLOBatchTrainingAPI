@@ -6,7 +6,6 @@ pillow
 onnx
 onnxruntime
 onnxruntime-tools
-onnxruntime.quantization
 
 google-cloud-storage
 bigquery
