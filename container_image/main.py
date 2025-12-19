@@ -20,6 +20,7 @@ def main():
     order to read data from Cloud Storage or write data to Cloud Storage. Job might not need to upload back to gcs. 
     Vertex is also integrated with google cloud ai hosting so I might save this container as a users cloud model.
     '''
+    
     args = parser.parse_args()
 
     #tempfile will not delete when it closes (delete=false)

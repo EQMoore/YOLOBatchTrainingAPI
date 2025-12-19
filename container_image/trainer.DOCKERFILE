@@ -10,7 +10,7 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY vm_image/requirements.txt /app/requirements.txt
+COPY container_imageß/requirements.txt /app/requirements.txt
 
 RUN pip install --upgrade pip \
     && pip install --no-cache-dir -r /app/requirements.txt
