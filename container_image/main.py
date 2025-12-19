@@ -57,7 +57,7 @@ def main():
                 print(f"Error: {temp_zip_path} is not a valid ZIP file.")
     finally:
         try:
-            #delete the temp_zip_path because delete == true
+            #delete the temp_zip_path because delete != true
             os.remove(temp_zip_path)
         except Exception:
             pass
