@@ -22,7 +22,7 @@ def main():
     '''
     args = parser.parse_args()
 
-    #tempfile will not delete when it closes (delete=falseß)
+    #tempfile will not delete when it closes (delete=false)
     with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as temp_zip:
         temp_zip_path = temp_zip.name
     try:
@@ -45,7 +45,7 @@ def main():
                         #upload the final unquantized model to gcs
                         trainer_gcs_util.upload_model(final_pt)
                     
-                    #quantize the model
+                    #get the quantized model
                     quant_onx = os.path.join(work_dir, 'final_model.quant.onnx')
                     if os.path.exists(quant_onx):
                         out_blob = f"{args.model}/final_model.quant.onnx"
