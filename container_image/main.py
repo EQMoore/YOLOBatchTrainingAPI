@@ -52,7 +52,7 @@ def main():
                         #upload the quantized model to gcs
                         trainer_gcs_util.upload_model(quant_onx)
                         
-            #handle an error in the case that we can not extract the zip file because it is not a valid zip file
+            #handle an error in the case that the program can not extract the zip file
             except zipfile.BadZipFile:
                 print(f"Error: {temp_zip_path} is not a valid ZIP file.")
     finally:
