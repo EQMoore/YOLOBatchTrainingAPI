@@ -2,6 +2,7 @@ fastapi
 uvicorn
 google-cloud-storage
 google-cloud-aiplatform
+python-multipart
 ultralytics
 onnx
 onnxruntime
