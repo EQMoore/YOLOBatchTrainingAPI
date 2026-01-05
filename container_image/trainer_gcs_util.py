@@ -2,7 +2,7 @@ import os
 from google.cloud import storage
 from google.cloud import bigquery
 
-project_number = os.environ["CLOUD_ML_PROJECT_ID"]
+project_number = os.environ["PROJECT_ID"]
 
 client = bigquery.Client(project=project_number)
 
