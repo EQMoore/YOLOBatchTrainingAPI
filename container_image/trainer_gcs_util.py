@@ -31,7 +31,7 @@ def download_from_gcs(local_path: str, gs_uri: str) -> str:
 
 def upload_model(local_path: str) -> str:
     client = storage.Client()
-    bucket_name, blob_path = _parse_gs_uri(os.getenv('AIP_MODEL_DIR', 'error'))
+    bucket_name, blob_path = _parse_gs_uri(os.getenv('BUCKET_NAME', 'error'))
     bucket = client.bucket(bucket_name)
     blob = bucket.blob(blob_path)
     blob.upload_from_filename(local_path)
