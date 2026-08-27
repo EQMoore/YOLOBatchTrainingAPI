@@ -1,6 +1,5 @@
+# torch / torchvision come from the pytorch/pytorch CUDA base image
 ultralytics
-torch
-torchvision
 pillow
 
 onnx
