@@ -36,37 +36,45 @@ Required by the API service:
 | `PROJECT_ID` | GCP project id |
 | `REGION` | Region for Vertex AI (e.g. `us-central1`) |
 | `VERTEX_CONTAINER_URI` | Image URI of the trainer container (e.g. `REGION-docker.pkg.dev/PROJECT/REPO/yolo-trainer:TAG`) |
+| `API_TOKENS` | `token:user` pairs, comma-separated (e.g. `tok_abc:alice,tok_def:bob`) |
 
 The trainer container needs `BUCKET_NAME` (and `PROJECT_ID` for Vertex).
+
+## Authentication
+
+Every endpoint requires a bearer token:
+
+```
+Authorization: Bearer <token>
+```
+
+The token is matched against `API_TOKENS` and resolved to a user id. That user
+id is the owner prefix for all storage paths — it is **never** taken from the
+request, so a caller cannot act on another user's models. Requests with a
+missing or unknown token get `401`.
 
 ## API
 
 ### `POST /train_yolo` → `202 Accepted`
 
-The dataset ZIP is sent as a `multipart/form-data` body; every other parameter
-is a **query-string** parameter.
+`multipart/form-data` body:
 
-Multipart body:
-
-| Field | Type | Notes |
-| --- | --- | --- |
-| `dataset` | file | ZIP containing an Ultralytics-format dataset with a `data.yaml` |
-
-Query parameters:
-
-| Param | Type | Default | Notes |
+| Field | Type | Default | Notes |
 | --- | --- | --- | --- |
-| `model` | string | — | Name for this model; used in the output path |
+| `dataset` | file | — | ZIP containing an Ultralytics-format dataset with a `data.yaml` |
+| `model` | string | — | Name for this model; used in the output path (`[A-Za-z0-9._-]`, ≤64) |
 | `arch` | string | `yolov8n` | Base checkpoint to fine-tune (`yolov8n`, `yolov8s`, …) |
 | `epochs` | int | `10` | |
 | `batch` | int | `16` | |
-| `user_id` | string | `default` | Owner id; used as the output path prefix |
 
 Example:
 
 ```bash
-curl -X POST "http://localhost:8000/train_yolo?model=car-detector&epochs=10&user_id=alice" \
-  -F "dataset=@data.zip"
+curl -X POST "http://localhost:8000/train_yolo" \
+  -H "Authorization: Bearer tok_abc" \
+  -F "dataset=@data.zip" \
+  -F "model=car-detector" \
+  -F "epochs=10"
 ```
 
 The ZIP is uploaded to `gs://$BUCKET_NAME/{user_id}/{model}.zip`. If
@@ -81,16 +89,18 @@ Response:
 The job runs asynchronously on Vertex AI; the response returns as soon as the
 job is created.
 
-### `GET /get_models?user_id=<id>`
+### `GET /get_models`
 
-Returns the list of GCS object names under the `user_id` prefix.
+Returns the list of GCS object names owned by the caller.
 
-### `GET /download_model?user_id=<id>&model_name=<name>`
+### `GET /download_model?model_name=<name>`
 
 Returns the list of GCS object names under `{user_id}/{model_name}`.
 
-> Note: `download_model` / `download_model_file` currently list objects rather
-> than streaming a file. Streaming the artifact is not finished yet.
+### `GET /download_model_file?model=<name>&artifact=<name>`
+
+Streams one artifact (`final_model.pt`, `final_model.onnx`, or
+`final_model.quant.onnx`; defaults to the quantized ONNX) as a file download.
 
 ## Trainer container
 
@@ -121,5 +131,6 @@ non-zero if the ZIP is invalid or training produces no artifacts.
 
 ```
 pip install -r requirements.txt
+export API_TOKENS="tok_dev:me"
 uvicorn main:app --reload
 ```

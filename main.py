@@ -1,21 +1,44 @@
-import tempfile
-import shutil
-from fastapi import FastAPI, UploadFile, HTTPException
-from fastapi.responses import StreamingResponse
-import os
 import io
+import os
+import re
+import shutil
+import tempfile
+
+from fastapi import Depends, FastAPI, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from google.cloud import storage
+
 import gcs_util
+from auth import current_user
 
 app = FastAPI()
 
 #http response codes: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
 
+#resource names go into GCS object paths, so keep them to a safe character set
+_NAME_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
+_ARTIFACTS = {"final_model.pt", "final_model.onnx", "final_model.quant.onnx"}
+
+
+def _validate_name(value: str, field: str) -> str:
+    if not _NAME_RE.match(value):
+        raise HTTPException(status_code=400, detail=f"Invalid {field}")
+    return value
+
+
 @app.post("/train_yolo", status_code=202)
-def train_yolo(dataset: UploadFile, model: str, epochs: int = 10, batch: int = 16,
-               arch: str = "yolov8n", user_id: str = "default"):
+def train_yolo(
+    dataset: UploadFile,
+    model: str = Form(...),
+    epochs: int = Form(10),
+    batch: int = Form(16),
+    arch: str = Form("yolov8n"),
+    user_id: str = Depends(current_user),
+):
     if not dataset.filename:
         raise HTTPException(status_code=400, detail="No dataset uploaded")
+    _validate_name(model, "model")
+    _validate_name(arch, "arch")
 
     with tempfile.NamedTemporaryFile(suffix=".zip", delete=False) as temp_file:
         temp_path = temp_file.name
@@ -39,12 +62,13 @@ def train_yolo(dataset: UploadFile, model: str, epochs: int = 10, batch: int = 1
 
 
 @app.get("/get_models")
-def get_models(user_id: str):
+def get_models(user_id: str = Depends(current_user)):
     return gcs_util.get_user_models(user_id)
 
 
 @app.get("/download_model")
-def download_model(user_id: str, model_name: str):
+def download_model(model_name: str, user_id: str = Depends(current_user)):
+    _validate_name(model_name, "model_name")
     return gcs_util.get_user_models(f"{user_id}/{model_name}")
 
 
@@ -57,9 +81,20 @@ def stream_blob(bucket_name: str, blob_name: str):
     stream = io.BytesIO()
     blob.download_to_file(stream)
     stream.seek(0)
-    return StreamingResponse(stream, media_type="application/octet-stream", headers={"Content-Disposition": f"attachment; filename={os.path.basename(blob_name)}"})
+    return StreamingResponse(
+        stream,
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f"attachment; filename={os.path.basename(blob_name)}"},
+    )
 
 
 @app.get("/download_model_file")
-def download_model_file(user_id: str, model: str, artifact: str = "final_model.quant.onnx"):
-    blob_name = f"{user_id}/{model}/{artifact}"
+def download_model_file(
+    model: str,
+    artifact: str = "final_model.quant.onnx",
+    user_id: str = Depends(current_user),
+):
+    _validate_name(model, "model")
+    if artifact not in _ARTIFACTS:
+        raise HTTPException(status_code=400, detail="Unknown artifact")
+    return stream_blob(gcs_util.BUCKET_NAME, f"{user_id}/{model}/{artifact}")
