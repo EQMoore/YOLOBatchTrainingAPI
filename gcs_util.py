@@ -27,22 +27,37 @@ def upload_to_gcs(local_path: str, blob_path: str) -> str:
     blob.upload_from_filename(local_path)
     return f"gs://{BUCKET_NAME}/{blob_path}"
 
-def submit_training_job(dataset_gcs_path: str, model_name: str, epochs: int, batch: int):
-    aiplatform.init(project=PROJECT_ID, location=REGION)
+def submit_training_job(dataset_gcs_uri: str, user_id: str, model_name: str,
+                        epochs: int, batch: int, arch: str = "yolov8n") -> str:
+    if not all([BUCKET_NAME, PROJECT_ID, REGION]) or VERTEX_CONTAINER_URI == "default":
+        raise RuntimeError(
+            "Missing required environment: BUCKET_NAME, PROJECT_ID, REGION, "
+            "VERTEX_CONTAINER_URI"
+        )
+
+    aiplatform.init(
+        project=PROJECT_ID,
+        location=REGION,
+        staging_bucket=f"gs://{BUCKET_NAME}",
+    )
     job_id = f"yolo-train-{uuid.uuid4()}"
 
     job = aiplatform.CustomContainerTrainingJob(
-        display_name=model_name,
-        container_uri=VERTEX_CONTAINER_URI
+        display_name=job_id,
+        container_uri=VERTEX_CONTAINER_URI,
     )
+    #trainer CLI: container_image/main.py -- all args are --flag=value strings
     args = [
-        f"--dataset_zip={dataset_gcs_path}",
+        f"--dataset_zip={dataset_gcs_uri}",
+        f"--user_id={user_id}",
         f"--model={model_name}",
-        epochs,
-        batch
+        f"--arch={arch}",
+        f"--epochs={epochs}",
+        f"--batch={batch}",
     ]
 
-    job.run(
+    #submit() returns once the job is created; run() would block until training ends
+    job.submit(
         args=args,
         machine_type="n1-standard-8",
         accelerator_type="NVIDIA_TESLA_T4",

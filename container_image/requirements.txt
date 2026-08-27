@@ -1,14 +1,7 @@
-# torch / torchvision come from the pytorch/pytorch CUDA base image
+# torch / torchvision are provided by the pytorch/pytorch CUDA base image
 ultralytics
-pillow
-
 onnx
+onnxslim
 onnxruntime
-onnxruntime-tools
 
 google-cloud-storage
-bigquery
-google-api-python-client
-google-auth
-
-ffmpeg-python

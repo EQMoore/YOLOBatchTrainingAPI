@@ -11,8 +11,9 @@ app = FastAPI()
 
 #http response codes: https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status
 
-@app.post("/train_yolo")
-def train_yolo(dataset: UploadFile, model: str, epochs: int = 10, batch: int = 16, user_id: str = "default"):
+@app.post("/train_yolo", status_code=202)
+def train_yolo(dataset: UploadFile, model: str, epochs: int = 10, batch: int = 16,
+               arch: str = "yolov8n", user_id: str = "default"):
     if not dataset.filename:
         raise HTTPException(status_code=400, detail="No dataset uploaded")
 
@@ -23,17 +24,18 @@ def train_yolo(dataset: UploadFile, model: str, epochs: int = 10, batch: int = 1
     try:
         blob_path = f"{user_id}/{model}.zip"
         if gcs_util.check_gcs_unique_name(f"{user_id}/{model}"):
-            os.remove(temp_path)
             raise HTTPException(status_code=409, detail="Model name already in use")
 
-        gcs_path = gcs_util.upload_to_gcs(temp_path, blob_path)
+        gcs_uri = gcs_util.upload_to_gcs(temp_path, blob_path)
 
-        gcs_util.submit_training_job(blob_path, model, epochs, batch)
+        job_id = gcs_util.submit_training_job(gcs_uri, user_id, model, epochs, batch, arch)
     finally:
         try:
             os.remove(temp_path)
         except Exception:
             pass
+
+    return {"job_id": job_id, "user_id": user_id, "model": model, "status": "submitted"}
 
 
 @app.get("/get_models")
