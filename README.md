@@ -40,6 +40,12 @@ Required by the API service:
 
 The trainer container needs `BUCKET_NAME` (and `PROJECT_ID` for Vertex).
 
+## GCP setup
+
+One-time provisioning (Artifact Registry, the bucket, service accounts, and
+Workload Identity Federation for CI) is scripted in
+[`infra/gcp_setup.sh`](infra/README.md).
+
 ## Authentication
 
 Every endpoint requires a bearer token:
@@ -101,6 +107,23 @@ Returns the list of GCS object names under `{user_id}/{model_name}`.
 
 Streams one artifact (`final_model.pt`, `final_model.onnx`, or
 `final_model.quant.onnx`; defaults to the quantized ONNX) as a file download.
+
+## API container
+
+Built from `api.DOCKERFILE` with the repo root as the build context:
+
+```
+docker build . --file api.DOCKERFILE --tag yolo-api:local
+docker run --rm -p 8000:8080 \
+  -e API_TOKENS="tok_dev:me" \
+  -e BUCKET_NAME=... -e PROJECT_ID=... -e REGION=us-central1 \
+  -e VERTEX_CONTAINER_URI=... \
+  yolo-api:local
+```
+
+The container listens on `$PORT` (default `8080`). GCP credentials are picked up
+from the environment (Workload Identity on Cloud Run / GKE, or a mounted service
+account key via `GOOGLE_APPLICATION_CREDENTIALS`).
 
 ## Trainer container
 
