@@ -1,0 +1,65 @@
+name: Deploy
+
+on:
+  push:
+    branches: [ "main" ]
+
+#one deploy at a time; never cancel a run that is mid-rollout
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write          # required for Workload Identity Federation
+
+jobs:
+  #re-run the exact test suite that gates PRs, so a direct push to main
+  #that skipped review still cannot deploy broken code
+  test:
+    uses: ./.github/workflows/tests.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_AR_REPO }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: auth
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      - name: Build and push the API and trainer images
+        run: |
+          set -euo pipefail
+          docker build . --file api.DOCKERFILE \
+            --tag "$REGISTRY/yolo-api:$GITHUB_SHA" --tag "$REGISTRY/yolo-api:latest"
+          docker build container_image --file container_image/trainer.DOCKERFILE \
+            --tag "$REGISTRY/yolo-trainer:$GITHUB_SHA" --tag "$REGISTRY/yolo-trainer:latest"
+          docker push "$REGISTRY/yolo-api:$GITHUB_SHA"
+          docker push "$REGISTRY/yolo-api:latest"
+          docker push "$REGISTRY/yolo-trainer:$GITHUB_SHA"
+          docker push "$REGISTRY/yolo-trainer:latest"
+
+      - name: Deploy the API to Cloud Run
+        run: |
+          set -euo pipefail
+          #public service — the app's bearer token is the security boundary.
+          #For a private service swap --allow-unauthenticated for --no-allow-unauthenticated.
+          gcloud run deploy yolo-api \
+            --image "$REGISTRY/yolo-api:$GITHUB_SHA" \
+            --region "${{ vars.GCP_REGION }}" \
+            --service-account "${{ vars.GCP_API_SERVICE_ACCOUNT }}" \
+            --allow-unauthenticated \
+            --set-env-vars "BUCKET_NAME=${{ vars.GCP_BUCKET_NAME }},PROJECT_ID=${{ vars.GCP_PROJECT_ID }},REGION=${{ vars.GCP_REGION }},VERTEX_CONTAINER_URI=$REGISTRY/yolo-trainer:$GITHUB_SHA" \
+            --set-secrets "API_TOKENS=api-tokens:latest"
