@@ -1,4 +1,8 @@
 /venv
+.venv/
 __pycache__/
 .env
 .idea/
+.pytest_cache/
+.coverage
+htmlcov/

@@ -157,3 +157,16 @@ pip install -r requirements.txt
 export API_TOKENS="tok_dev:me"
 uvicorn main:app --reload
 ```
+
+## Tests
+
+```
+pip install -r requirements-dev.txt
+pytest
+```
+
+Unit tests cover the API service (`main.py`, `auth.py`, `gcs_util.py`) with no
+network or GCP access — the Cloud Storage and Vertex AI clients are stubbed. CI
+fails the build under 100% line + branch coverage (`--cov-fail-under=100` in
+`pyproject.toml`). The **Tests** workflow runs on every push and pull request and
+is a required status check for merging to `main`.
