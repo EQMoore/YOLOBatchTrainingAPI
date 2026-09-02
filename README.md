@@ -190,15 +190,25 @@ coverage**.
 
 | Workflow | Trigger | Does |
 | --- | --- | --- |
-| **Tests** (`.github/workflows/tests.yml`) | every push, PRs to `main` | runs `pytest` with the 100 % coverage gate |
-| **Docker Image CI** (`.github/workflows/docker-image.yml`) | every push, PRs to `main` | builds both `api.DOCKERFILE` and `container_image/trainer.DOCKERFILE` |
+| **Tests** (`tests.yml`) | PRs to `main`, pushes to other branches | `pytest` with the 100 % line + branch coverage gate |
+| **Docker Image CI** (`docker-image.yml`) | PRs to `main`, pushes to other branches | builds `api.DOCKERFILE` and the trainer Dockerfile |
+| **Deploy** (`deploy.yml`) | push to `main` | re-runs the tests, then builds + pushes both images to Artifact Registry (`:<sha>` and `:latest`) and deploys the API to Cloud Run |
 
-`main` is a protected branch: the **Tests** check must pass before a pull
-request can be merged.
+`main` is a protected branch — the **Tests** check must pass before a PR can be
+merged, and **Deploy** re-runs the same suite as a gate before it ships.
+
+### Deploy setup
+
+Run [`infra/gcp_setup.sh`](infra/README.md) once, then set the GitHub Actions
+**repository variables** it prints (`GCP_PROJECT_ID`, `GCP_REGION`,
+`GCP_BUCKET_NAME`, `GCP_AR_REPO`, `GCP_WIF_PROVIDER`, `GCP_CI_SERVICE_ACCOUNT`,
+`GCP_API_SERVICE_ACCOUNT`). Auth is keyless via Workload Identity Federation.
+`API_TOKENS` is read from the `api-tokens` Secret Manager secret at runtime.
+The Cloud Run service is deployed `--allow-unauthenticated` — the bearer token
+is the security boundary; switch the flag in `deploy.yml` for a private service.
 
 ## Known limitations
 
-- No deploy step — CI builds the images but does not push or deploy them.
 - No job-status endpoint; once submitted, training progress is only visible in
   the Vertex AI console.
 - `download_model_file` buffers the artifact in memory before sending it.
