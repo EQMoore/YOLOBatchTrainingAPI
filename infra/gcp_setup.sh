@@ -91,6 +91,17 @@ gcloud iam service-accounts add-iam-policy-binding "$API_SA_EMAIL" \
   --member="serviceAccount:${CI_SA_EMAIL}" \
   --role="roles/iam.serviceAccountUser"
 
+echo "== API token secret =="
+if ! gcloud secrets describe api-tokens >/dev/null 2>&1; then
+  printf 'changeme:demo' | gcloud secrets create api-tokens --data-file=-
+  echo "  created 'api-tokens' with a PLACEHOLDER value — add a real version:"
+  echo "    printf 'tok_xxx:alice' | gcloud secrets versions add api-tokens --data-file=-"
+fi
+# the Cloud Run service (running as the API SA) reads this at startup
+gcloud secrets add-iam-policy-binding api-tokens \
+  --member="serviceAccount:${API_SA_EMAIL}" \
+  --role="roles/secretmanager.secretAccessor"
+
 echo "== Workload Identity Federation =="
 gcloud iam workload-identity-pools create "$POOL" \
   --location=global --display-name="GitHub Actions" \
@@ -116,18 +127,21 @@ cat <<EOF
 Set these as GitHub Actions repository variables (Settings > Secrets and
 variables > Actions > Variables):
 
-  GCP_PROJECT_ID         ${PROJECT_ID}
-  GCP_REGION             ${REGION}
-  GCP_WIF_PROVIDER       ${WIF_PROVIDER}
-  GCP_CI_SERVICE_ACCOUNT ${CI_SA_EMAIL}
-  GCP_AR_REPO            ${AR_REPO}
+  GCP_PROJECT_ID          ${PROJECT_ID}
+  GCP_REGION              ${REGION}
+  GCP_BUCKET_NAME         ${BUCKET_NAME}
+  GCP_AR_REPO             ${AR_REPO}
+  GCP_WIF_PROVIDER        ${WIF_PROVIDER}
+  GCP_CI_SERVICE_ACCOUNT  ${CI_SA_EMAIL}
   GCP_API_SERVICE_ACCOUNT ${API_SA_EMAIL}
 
-Trainer image URI (set as VERTEX_CONTAINER_URI on the API):
+The Deploy workflow builds and pushes both images and deploys the API to Cloud
+Run on every push to main. It sets VERTEX_CONTAINER_URI to the trainer image it
+just built:
 
-  ${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/yolo-trainer:latest
+  ${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/yolo-trainer:<commit-sha>
 
-Store API_TOKENS as a Secret Manager secret before deploying the API:
+Put the real API tokens into the 'api-tokens' secret this script created:
 
-  printf 'tok_xxx:alice' | gcloud secrets create api-tokens --data-file=-
+  printf 'tok_xxx:alice' | gcloud secrets versions add api-tokens --data-file=-
 EOF
