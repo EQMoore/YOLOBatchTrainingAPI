@@ -1,0 +1,133 @@
+#!/usr/bin/env bash
+#
+# One-time GCP setup for the YOLO Batch Training API.
+#
+# Creates: enabled APIs, an Artifact Registry Docker repo, the GCS bucket,
+# a runtime service account for the API, a CI service account for GitHub
+# Actions, and a Workload Identity Federation pool/provider so GitHub Actions
+# can authenticate without a downloaded key.
+#
+# Safe to re-run: every step tolerates "already exists".
+#
+# Usage:
+#   PROJECT_ID=my-proj BUCKET_NAME=my-bucket GITHUB_REPO=owner/repo \
+#     ./infra/gcp_setup.sh
+#
+set -euo pipefail
+
+PROJECT_ID="${PROJECT_ID:?set PROJECT_ID}"
+BUCKET_NAME="${BUCKET_NAME:?set BUCKET_NAME (bucket name only, no gs://)}"
+GITHUB_REPO="${GITHUB_REPO:?set GITHUB_REPO as owner/repo}"
+REGION="${REGION:-us-central1}"
+AR_REPO="${AR_REPO:-yolo}"
+
+API_SA="yolo-api"
+CI_SA="yolo-ci"
+POOL="github"
+PROVIDER="github"
+
+API_SA_EMAIL="${API_SA}@${PROJECT_ID}.iam.gserviceaccount.com"
+CI_SA_EMAIL="${CI_SA}@${PROJECT_ID}.iam.gserviceaccount.com"
+
+gcloud config set project "$PROJECT_ID"
+PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
+
+echo "== Enabling APIs =="
+gcloud services enable \
+  artifactregistry.googleapis.com \
+  aiplatform.googleapis.com \
+  storage.googleapis.com \
+  run.googleapis.com \
+  iamcredentials.googleapis.com \
+  sts.googleapis.com \
+  secretmanager.googleapis.com
+
+echo "== Artifact Registry repo =="
+gcloud artifacts repositories create "$AR_REPO" \
+  --repository-format=docker --location="$REGION" \
+  --description="YOLO trainer / API images" \
+  || echo "  repo already exists"
+
+echo "== GCS bucket =="
+gcloud storage buckets create "gs://${BUCKET_NAME}" \
+  --location="$REGION" --uniform-bucket-level-access \
+  || echo "  bucket already exists"
+
+echo "== API runtime service account =="
+gcloud iam service-accounts create "$API_SA" \
+  --display-name="YOLO API (Cloud Run runtime)" \
+  || echo "  $API_SA already exists"
+# submit Vertex AI training jobs
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${API_SA_EMAIL}" \
+  --role="roles/aiplatform.user" --condition=None
+# read datasets / write artifacts / write the Vertex staging prefix
+gcloud storage buckets add-iam-policy-binding "gs://${BUCKET_NAME}" \
+  --member="serviceAccount:${API_SA_EMAIL}" \
+  --role="roles/storage.objectAdmin"
+
+echo "== Vertex custom-training service agent =="
+# CustomContainerTrainingJob runs as this agent by default; it needs the bucket
+CC_AGENT="service-${PROJECT_NUMBER}@gcp-sa-aiplatform-cc.iam.gserviceaccount.com"
+gcloud beta services identity create --service=aiplatform.googleapis.com --project="$PROJECT_ID" >/dev/null 2>&1 || true
+gcloud storage buckets add-iam-policy-binding "gs://${BUCKET_NAME}" \
+  --member="serviceAccount:${CC_AGENT}" \
+  --role="roles/storage.objectAdmin"
+
+echo "== CI service account (GitHub Actions) =="
+gcloud iam service-accounts create "$CI_SA" \
+  --display-name="YOLO CI (GitHub Actions)" \
+  || echo "  $CI_SA already exists"
+# push images
+gcloud artifacts repositories add-iam-policy-binding "$AR_REPO" \
+  --location="$REGION" \
+  --member="serviceAccount:${CI_SA_EMAIL}" \
+  --role="roles/artifactregistry.writer"
+# deploy Cloud Run, and act as the API runtime SA while doing so
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${CI_SA_EMAIL}" \
+  --role="roles/run.admin" --condition=None
+gcloud iam service-accounts add-iam-policy-binding "$API_SA_EMAIL" \
+  --member="serviceAccount:${CI_SA_EMAIL}" \
+  --role="roles/iam.serviceAccountUser"
+
+echo "== Workload Identity Federation =="
+gcloud iam workload-identity-pools create "$POOL" \
+  --location=global --display-name="GitHub Actions" \
+  || echo "  pool already exists"
+gcloud iam workload-identity-pools providers create-oidc "$PROVIDER" \
+  --location=global --workload-identity-pool="$POOL" \
+  --display-name="GitHub" \
+  --issuer-uri="https://token.actions.githubusercontent.com" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --attribute-condition="assertion.repository=='${GITHUB_REPO}'" \
+  || echo "  provider already exists"
+# only this repo may impersonate the CI service account
+gcloud iam service-accounts add-iam-policy-binding "$CI_SA_EMAIL" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL}/attribute.repository/${GITHUB_REPO}"
+
+WIF_PROVIDER="projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL}/providers/${PROVIDER}"
+
+cat <<EOF
+
+== Done ==
+
+Set these as GitHub Actions repository variables (Settings > Secrets and
+variables > Actions > Variables):
+
+  GCP_PROJECT_ID         ${PROJECT_ID}
+  GCP_REGION             ${REGION}
+  GCP_WIF_PROVIDER       ${WIF_PROVIDER}
+  GCP_CI_SERVICE_ACCOUNT ${CI_SA_EMAIL}
+  GCP_AR_REPO            ${AR_REPO}
+  GCP_API_SERVICE_ACCOUNT ${API_SA_EMAIL}
+
+Trainer image URI (set as VERTEX_CONTAINER_URI on the API):
+
+  ${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}/yolo-trainer:latest
+
+Store API_TOKENS as a Secret Manager secret before deploying the API:
+
+  printf 'tok_xxx:alice' | gcloud secrets create api-tokens --data-file=-
+EOF
