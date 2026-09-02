@@ -44,19 +44,30 @@ def train_yolo(
         temp_path = temp_file.name
         shutil.copyfileobj(dataset.file, temp_file)
 
+    blob_path = f"{user_id}/{model}.zip"
     try:
-        blob_path = f"{user_id}/{model}.zip"
         if gcs_util.check_gcs_unique_name(f"{user_id}/{model}"):
             raise HTTPException(status_code=409, detail="Model name already in use")
 
         gcs_uri = gcs_util.upload_to_gcs(temp_path, blob_path)
-
-        job_id = gcs_util.submit_training_job(gcs_uri, user_id, model, epochs, batch, arch)
     finally:
         try:
             os.remove(temp_path)
         except Exception:
             pass
+
+    try:
+        job_id = gcs_util.submit_training_job(gcs_uri, user_id, model, epochs, batch, arch)
+    except Exception as exc:
+        #the dataset is in GCS but no job was created; remove it so this model
+        #name isn't permanently blocked, then surface the failure
+        try:
+            gcs_util.delete_from_gcs(blob_path)
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=502, detail="Failed to submit training job"
+        ) from exc
 
     return {"job_id": job_id, "user_id": user_id, "model": model, "status": "submitted"}
 

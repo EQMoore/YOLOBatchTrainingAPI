@@ -7,9 +7,13 @@ class _FakeBlob:
     def __init__(self, name):
         self.name = name
         self.uploaded_from = None
+        self.deleted = False
 
     def upload_from_filename(self, local_path):
         self.uploaded_from = local_path
+
+    def delete(self):
+        self.deleted = True
 
 
 class _FakeBucket:
@@ -102,6 +106,11 @@ def test_upload_to_gcs(bucket):
     uri = gcs_util.upload_to_gcs("/tmp/data.zip", "alice/m.zip")
     assert uri == f"gs://{gcs_util.BUCKET_NAME}/alice/m.zip"
     assert bucket.created["alice/m.zip"].uploaded_from == "/tmp/data.zip"
+
+
+def test_delete_from_gcs(bucket):
+    gcs_util.delete_from_gcs("alice/m.zip")
+    assert bucket.created["alice/m.zip"].deleted is True
 
 
 class _FakeTrainingJob:

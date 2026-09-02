@@ -36,6 +36,11 @@ def upload_to_gcs(local_path: str, blob_path: str) -> str:
     blob.upload_from_filename(local_path)
     return f"gs://{BUCKET_NAME}/{blob_path}"
 
+def delete_from_gcs(blob_path: str) -> None:
+    client = storage.Client()
+    bucket = client.bucket(BUCKET_NAME)
+    bucket.blob(blob_path).delete()
+
 def submit_training_job(dataset_gcs_uri: str, user_id: str, model_name: str,
                         epochs: int, batch: int, arch: str = "yolov8n") -> str:
     if not all([BUCKET_NAME, PROJECT_ID, REGION]) or VERTEX_CONTAINER_URI == "default":

@@ -23,6 +23,7 @@ def stub_gcs(monkeypatch):
         main.gcs_util, "upload_to_gcs", lambda path, blob: f"gs://bucket/{blob}"
     )
     monkeypatch.setattr(main.gcs_util, "submit_training_job", lambda *args: "yolo-train-123")
+    monkeypatch.setattr(main.gcs_util, "delete_from_gcs", lambda blob: None)
 
 
 def _dataset(content=b"PK\x03\x04data"):
@@ -82,13 +83,45 @@ def test_train_yolo_rejects_duplicate_name(client, monkeypatch):
     assert resp.status_code == 409
 
 
-def test_train_yolo_ignores_cleanup_failure(client, stub_gcs, monkeypatch):
+def test_train_yolo_ignores_temp_cleanup_failure(client, stub_gcs, monkeypatch):
     def boom(path):
         raise OSError("cannot remove")
 
     monkeypatch.setattr(main.os, "remove", boom)
     resp = client.post("/train_yolo", data={"model": "m"}, files=_dataset())
     assert resp.status_code == 202
+
+
+def test_train_yolo_removes_dataset_when_submit_fails(client, monkeypatch):
+    deleted = []
+
+    def fail_submit(*args):
+        raise RuntimeError("vertex unavailable")
+
+    monkeypatch.setattr(main.gcs_util, "check_gcs_unique_name", lambda name: False)
+    monkeypatch.setattr(main.gcs_util, "upload_to_gcs", lambda path, blob: f"gs://b/{blob}")
+    monkeypatch.setattr(main.gcs_util, "submit_training_job", fail_submit)
+    monkeypatch.setattr(main.gcs_util, "delete_from_gcs", lambda blob: deleted.append(blob))
+
+    resp = client.post("/train_yolo", data={"model": "m"}, files=_dataset())
+    assert resp.status_code == 502
+    assert deleted == ["alice/m.zip"]
+
+
+def test_train_yolo_submit_failure_survives_cleanup_error(client, monkeypatch):
+    def fail_submit(*args):
+        raise RuntimeError("vertex unavailable")
+
+    def fail_delete(blob):
+        raise RuntimeError("gcs delete failed")
+
+    monkeypatch.setattr(main.gcs_util, "check_gcs_unique_name", lambda name: False)
+    monkeypatch.setattr(main.gcs_util, "upload_to_gcs", lambda path, blob: "gs://b/x")
+    monkeypatch.setattr(main.gcs_util, "submit_training_job", fail_submit)
+    monkeypatch.setattr(main.gcs_util, "delete_from_gcs", fail_delete)
+
+    resp = client.post("/train_yolo", data={"model": "m"}, files=_dataset())
+    assert resp.status_code == 502
 
 
 def test_get_models(client, monkeypatch):

@@ -98,7 +98,9 @@ Response:
 ```
 
 Errors: `400` (no dataset, or `model` / `arch` fails validation), `401`
-(bad token), `409` (`{user_id}/{model}` already has a dataset or artifacts).
+(bad token), `409` (`{user_id}/{model}` already has a dataset or artifacts),
+`502` (Vertex AI job submission failed — the just-uploaded dataset is deleted so
+the name stays free to retry).
 
 ### `GET /get_models`
 
