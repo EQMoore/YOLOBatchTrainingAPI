@@ -8,17 +8,26 @@ PROJECT_ID = os.getenv("PROJECT_ID")
 REGION = os.getenv("REGION")
 VERTEX_CONTAINER_URI = os.getenv("VERTEX_CONTAINER_URI", "default")
 
-def get_user_models(user_id:str):
+def get_user_models(prefix: str):
+    #match on a whole path segment: get_user_models("alice") must not leak
+    #"alice-corp/..." objects. Callers pass a user id or "{user_id}/{model}".
+    prefix = prefix.rstrip("/") + "/"
     client = storage.Client()
     bucket = client.bucket(BUCKET_NAME)
-    blobs = list(bucket.list_blobs(prefix=user_id))
+    blobs = list(bucket.list_blobs(prefix=prefix))
     return [b.name for b in blobs]
 
 def check_gcs_unique_name(name: str):
+    #True if the model name is taken: its dataset zip or any artifact exists.
+    #Segment-scoped, so "car" does not collide with "car-detector".
+    zip_name = f"{name}.zip"
+    artifact_prefix = f"{name}/"
     client = storage.Client()
     bucket = client.bucket(BUCKET_NAME)
-    blobs = list(bucket.list_blobs(prefix=name))
-    return len(blobs) > 0
+    for blob in bucket.list_blobs(prefix=name):
+        if blob.name == zip_name or blob.name.startswith(artifact_prefix):
+            return True
+    return False
 
 def upload_to_gcs(local_path: str, blob_path: str) -> str:
     client = storage.Client()

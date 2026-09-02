@@ -58,17 +58,42 @@ def test_get_user_models_returns_matching_names(monkeypatch):
     ]
 
 
+def test_get_user_models_is_segment_scoped(monkeypatch):
+    #"alice" must not match the separate tenant "alice-corp"
+    b = _FakeBucket(existing=["alice/m.zip", "alice-corp/secret.zip"])
+    _use(monkeypatch, b)
+    assert gcs_util.get_user_models("alice") == ["alice/m.zip"]
+
+
+def test_get_user_models_scopes_to_one_model(monkeypatch):
+    b = _FakeBucket(existing=["alice/car/final_model.pt", "alice/car-v2/final_model.pt"])
+    _use(monkeypatch, b)
+    assert gcs_util.get_user_models("alice/car") == ["alice/car/final_model.pt"]
+
+
 def test_get_user_models_empty(monkeypatch):
     _use(monkeypatch, _FakeBucket())
     assert gcs_util.get_user_models("nobody") == []
 
 
-def test_check_gcs_unique_name_true(monkeypatch):
+def test_check_gcs_unique_name_matches_dataset_zip(monkeypatch):
     _use(monkeypatch, _FakeBucket(existing=["alice/m.zip"]))
     assert gcs_util.check_gcs_unique_name("alice/m") is True
 
 
-def test_check_gcs_unique_name_false(monkeypatch):
+def test_check_gcs_unique_name_matches_artifacts(monkeypatch):
+    _use(monkeypatch, _FakeBucket(existing=["alice/m/final_model.pt"]))
+    assert gcs_util.check_gcs_unique_name("alice/m") is True
+
+
+def test_check_gcs_unique_name_ignores_sibling_prefix(monkeypatch):
+    #checking "alice/model" must not be tripped by "alice/model-x" / "alice/models"
+    b = _FakeBucket(existing=["alice/model-x.zip", "alice/models/y.pt"])
+    _use(monkeypatch, b)
+    assert gcs_util.check_gcs_unique_name("alice/model") is False
+
+
+def test_check_gcs_unique_name_false_when_absent(monkeypatch):
     _use(monkeypatch, _FakeBucket())
     assert gcs_util.check_gcs_unique_name("alice/m") is False
 
