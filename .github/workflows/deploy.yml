@@ -22,22 +22,58 @@ jobs:
   deploy:
     needs: test
     runs-on: ubuntu-latest
-    env:
-      REGISTRY: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_AR_REPO }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Resolve GCP config
+        env:
+          RAW_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          RAW_REGION: ${{ vars.GCP_REGION }}
+          RAW_BUCKET_NAME: ${{ vars.GCP_BUCKET_NAME }}
+          RAW_AR_REPO: ${{ vars.GCP_AR_REPO }}
+          RAW_WIF_PROVIDER: ${{ vars.GCP_WIF_PROVIDER }}
+          RAW_CI_SA: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
+          RAW_API_SA: ${{ vars.GCP_API_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          #strip any whitespace/CR/newline a copy-paste left in a repo variable
+          strip() { local v="$1"; printf '%s' "${v//[$'\r\n\t ']/}"; }
+          PROJECT_ID=$(strip "$RAW_PROJECT_ID")
+          REGION=$(strip "$RAW_REGION")
+          BUCKET_NAME=$(strip "$RAW_BUCKET_NAME")
+          AR_REPO=$(strip "$RAW_AR_REPO")
+          WIF_PROVIDER=$(strip "$RAW_WIF_PROVIDER")
+          CI_SA=$(strip "$RAW_CI_SA")
+          API_SA=$(strip "$RAW_API_SA")
+
+          for name in PROJECT_ID REGION BUCKET_NAME AR_REPO WIF_PROVIDER CI_SA API_SA; do
+            if [ -z "${!name}" ]; then
+              echo "::error::repository variable GCP_${name} is not set"
+              exit 1
+            fi
+          done
+
+          {
+            echo "PROJECT_ID=$PROJECT_ID"
+            echo "REGION=$REGION"
+            echo "BUCKET_NAME=$BUCKET_NAME"
+            echo "WIF_PROVIDER=$WIF_PROVIDER"
+            echo "CI_SA=$CI_SA"
+            echo "API_SA=$API_SA"
+            echo "REGISTRY=${REGION}-docker.pkg.dev/${PROJECT_ID}/${AR_REPO}"
+          } >> "$GITHUB_ENV"
 
       - id: auth
         uses: google-github-actions/auth@v2
         with:
-          project_id: ${{ vars.GCP_PROJECT_ID }}
-          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
-          service_account: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
+          project_id: ${{ env.PROJECT_ID }}
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.CI_SA }}
 
       - uses: google-github-actions/setup-gcloud@v2
 
       - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
 
       - name: Build and push the API and trainer images
         run: |
@@ -58,8 +94,8 @@ jobs:
           #For a private service swap --allow-unauthenticated for --no-allow-unauthenticated.
           gcloud run deploy yolo-api \
             --image "$REGISTRY/yolo-api:$GITHUB_SHA" \
-            --region "${{ vars.GCP_REGION }}" \
-            --service-account "${{ vars.GCP_API_SERVICE_ACCOUNT }}" \
+            --region "$REGION" \
+            --service-account "$API_SA" \
             --allow-unauthenticated \
-            --set-env-vars "BUCKET_NAME=${{ vars.GCP_BUCKET_NAME }},PROJECT_ID=${{ vars.GCP_PROJECT_ID }},REGION=${{ vars.GCP_REGION }},VERTEX_CONTAINER_URI=$REGISTRY/yolo-trainer:$GITHUB_SHA" \
+            --set-env-vars "BUCKET_NAME=$BUCKET_NAME,PROJECT_ID=$PROJECT_ID,REGION=$REGION,VERTEX_CONTAINER_URI=$REGISTRY/yolo-trainer:$GITHUB_SHA" \
             --set-secrets "API_TOKENS=api-tokens:latest"

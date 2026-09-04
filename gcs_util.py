@@ -70,13 +70,19 @@ def submit_training_job(dataset_gcs_uri: str, user_id: str, model_name: str,
         f"--batch={batch}",
     ]
 
-    #submit() returns once the job is created; run() would block until training ends
-    job.submit(
+    submit_kwargs = dict(
         args=args,
-        machine_type="n1-standard-8",
-        accelerator_type="NVIDIA_TESLA_T4",
-        accelerator_count=1,
+        machine_type=os.getenv("TRAIN_MACHINE_TYPE", "n1-standard-8"),
         base_output_dir=f"gs://{BUCKET_NAME}/training_outputs/{job_id}",
     )
+    #attach a GPU only when TRAIN_ACCELERATOR_TYPE is set (e.g. NVIDIA_TESLA_T4);
+    #unset -> CPU-only, which needs no GPU quota
+    accelerator = os.getenv("TRAIN_ACCELERATOR_TYPE")
+    if accelerator:
+        submit_kwargs["accelerator_type"] = accelerator
+        submit_kwargs["accelerator_count"] = int(os.getenv("TRAIN_ACCELERATOR_COUNT", "1"))
+
+    #submit() returns once the job is created; run() would block until training ends
+    job.submit(**submit_kwargs)
 
     return job_id

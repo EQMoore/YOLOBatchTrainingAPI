@@ -48,6 +48,9 @@ Required by the API service:
 | `REGION` | Region for Vertex AI (e.g. `us-central1`) |
 | `VERTEX_CONTAINER_URI` | Image URI of the trainer container (e.g. `REGION-docker.pkg.dev/PROJECT/REPO/yolo-trainer:TAG`) |
 | `PORT` | Port the API listens on (default `8080`; injected by Cloud Run) |
+| `TRAIN_ACCELERATOR_TYPE` | GPU for training jobs, e.g. `NVIDIA_TESLA_T4`. **Unset → CPU-only** (no GPU quota needed) |
+| `TRAIN_ACCELERATOR_COUNT` | GPUs per job (default `1`; only used when `TRAIN_ACCELERATOR_TYPE` is set) |
+| `TRAIN_MACHINE_TYPE` | Vertex machine type for training (default `n1-standard-8`) |
 
 The trainer container needs `BUCKET_NAME` (and runs with a Vertex service
 identity that can read/write the bucket).

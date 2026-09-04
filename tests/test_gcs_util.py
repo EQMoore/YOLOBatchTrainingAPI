@@ -144,6 +144,8 @@ def vertex(monkeypatch):
     monkeypatch.setattr(gcs_util, "PROJECT_ID", "proj")
     monkeypatch.setattr(gcs_util, "REGION", "us-central1")
     monkeypatch.setattr(gcs_util, "VERTEX_CONTAINER_URI", "img:latest")
+    for var in ("TRAIN_ACCELERATOR_TYPE", "TRAIN_ACCELERATOR_COUNT", "TRAIN_MACHINE_TYPE"):
+        monkeypatch.delenv(var, raising=False)
     return fake
 
 
@@ -168,11 +170,26 @@ def test_submit_training_job_success(vertex):
         "--batch=8",
     ]
     assert job.submitted["base_output_dir"] == f"gs://bkt/training_outputs/{job_id}"
+    #no accelerator env -> CPU-only job
+    assert job.submitted["machine_type"] == "n1-standard-8"
+    assert "accelerator_type" not in job.submitted
+    assert "accelerator_count" not in job.submitted
 
 
 def test_submit_training_job_uses_default_arch(vertex):
     gcs_util.submit_training_job("gs://bkt/a/m.zip", "a", "m", 10, 16)
     assert "--arch=yolov8n" in _FakeTrainingJob.instances[-1].submitted["args"]
+
+
+def test_submit_training_job_attaches_gpu_when_configured(vertex, monkeypatch):
+    monkeypatch.setenv("TRAIN_ACCELERATOR_TYPE", "NVIDIA_TESLA_T4")
+    monkeypatch.setenv("TRAIN_ACCELERATOR_COUNT", "2")
+    monkeypatch.setenv("TRAIN_MACHINE_TYPE", "n1-standard-16")
+    gcs_util.submit_training_job("gs://bkt/a/m.zip", "a", "m", 10, 16)
+    job = _FakeTrainingJob.instances[-1]
+    assert job.submitted["machine_type"] == "n1-standard-16"
+    assert job.submitted["accelerator_type"] == "NVIDIA_TESLA_T4"
+    assert job.submitted["accelerator_count"] == 2
 
 
 def test_submit_training_job_missing_container_uri(monkeypatch):
