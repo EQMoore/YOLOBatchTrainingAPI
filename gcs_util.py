@@ -72,11 +72,13 @@ def submit_training_job(dataset_gcs_uri: str, user_id: str, model_name: str,
 
     submit_kwargs = dict(
         args=args,
+        #the trainer container reads BUCKET_NAME itself (trainer_gcs_util.py) to
+        #upload artifacts; it does not inherit the API's environment
+        environment_variables={"BUCKET_NAME": BUCKET_NAME},
         machine_type=os.getenv("TRAIN_MACHINE_TYPE", "n1-standard-8"),
         base_output_dir=f"gs://{BUCKET_NAME}/training_outputs/{job_id}",
     )
     #attach a GPU only when TRAIN_ACCELERATOR_TYPE is set (e.g. NVIDIA_TESLA_T4);
-    #unset -> CPU-only, which needs no GPU quota
     accelerator = os.getenv("TRAIN_ACCELERATOR_TYPE")
     if accelerator:
         submit_kwargs["accelerator_type"] = accelerator

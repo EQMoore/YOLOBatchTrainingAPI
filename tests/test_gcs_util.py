@@ -170,6 +170,8 @@ def test_submit_training_job_success(vertex):
         "--batch=8",
     ]
     assert job.submitted["base_output_dir"] == f"gs://bkt/training_outputs/{job_id}"
+    #the trainer container needs BUCKET_NAME itself to upload artifacts
+    assert job.submitted["environment_variables"] == {"BUCKET_NAME": "bkt"}
     #no accelerator env -> CPU-only job
     assert job.submitted["machine_type"] == "n1-standard-8"
     assert "accelerator_type" not in job.submitted
