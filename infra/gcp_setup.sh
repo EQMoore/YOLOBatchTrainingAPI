@@ -7,7 +7,7 @@
 # Actions, and a Workload Identity Federation pool/provider so GitHub Actions
 # can authenticate without a downloaded key.
 #
-# Safe to re-run: every step tolerates "already exists".
+# Safe to re-run: every step is idempotent.
 #
 # Usage:
 #   PROJECT_ID=my-proj BUCKET_NAME=my-bucket GITHUB_REPO=owner/repo \
@@ -32,6 +32,44 @@ CI_SA_EMAIL="${CI_SA}@${PROJECT_ID}.iam.gserviceaccount.com"
 gcloud config set project "$PROJECT_ID"
 PROJECT_NUMBER="$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')"
 
+# --- helpers -----------------------------------------------------------------
+
+# Create a service account if it does not exist, then block until it is
+# visible to IAM. Service-account creation is eventually consistent, and a
+# policy binding that references one too soon fails with "does not exist".
+ensure_sa() {
+  local name="$1" display="$2"
+  local email="${name}@${PROJECT_ID}.iam.gserviceaccount.com"
+  if ! gcloud iam service-accounts describe "$email" >/dev/null 2>&1; then
+    gcloud iam service-accounts create "$name" --display-name="$display"
+  fi
+  local i
+  for i in $(seq 1 30); do
+    if gcloud iam service-accounts describe "$email" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "ERROR: ${email} still not visible after 60s" >&2
+  return 1
+}
+
+# Retry a command with linear backoff. IAM policy bindings can return a
+# transient INVALID_ARGUMENT for a few seconds after their member (a service
+# account or a WIF principal) is created.
+retry() {
+  local n=0
+  until "$@"; do
+    n=$((n + 1))
+    if [ "$n" -ge 6 ]; then
+      echo "ERROR: gave up after ${n} attempts: $*" >&2
+      return 1
+    fi
+    echo "  retry ${n}/5 in $((n * 5))s ..." >&2
+    sleep $((n * 5))
+  done
+}
+
 echo "== Enabling APIs =="
 gcloud services enable \
   artifactregistry.googleapis.com \
@@ -54,15 +92,13 @@ gcloud storage buckets create "gs://${BUCKET_NAME}" \
   || echo "  bucket already exists"
 
 echo "== API runtime service account =="
-gcloud iam service-accounts create "$API_SA" \
-  --display-name="YOLO API (Cloud Run runtime)" \
-  || echo "  $API_SA already exists"
+ensure_sa "$API_SA" "YOLO API (Cloud Run runtime)"
 # submit Vertex AI training jobs
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${API_SA_EMAIL}" \
   --role="roles/aiplatform.user" --condition=None
 # read datasets / write artifacts / write the Vertex staging prefix
-gcloud storage buckets add-iam-policy-binding "gs://${BUCKET_NAME}" \
+retry gcloud storage buckets add-iam-policy-binding "gs://${BUCKET_NAME}" \
   --member="serviceAccount:${API_SA_EMAIL}" \
   --role="roles/storage.objectAdmin"
 
@@ -70,24 +106,22 @@ echo "== Vertex custom-training service agent =="
 # CustomContainerTrainingJob runs as this agent by default; it needs the bucket
 CC_AGENT="service-${PROJECT_NUMBER}@gcp-sa-aiplatform-cc.iam.gserviceaccount.com"
 gcloud beta services identity create --service=aiplatform.googleapis.com --project="$PROJECT_ID" >/dev/null 2>&1 || true
-gcloud storage buckets add-iam-policy-binding "gs://${BUCKET_NAME}" \
+retry gcloud storage buckets add-iam-policy-binding "gs://${BUCKET_NAME}" \
   --member="serviceAccount:${CC_AGENT}" \
   --role="roles/storage.objectAdmin"
 
 echo "== CI service account (GitHub Actions) =="
-gcloud iam service-accounts create "$CI_SA" \
-  --display-name="YOLO CI (GitHub Actions)" \
-  || echo "  $CI_SA already exists"
+ensure_sa "$CI_SA" "YOLO CI (GitHub Actions)"
 # push images
-gcloud artifacts repositories add-iam-policy-binding "$AR_REPO" \
+retry gcloud artifacts repositories add-iam-policy-binding "$AR_REPO" \
   --location="$REGION" \
   --member="serviceAccount:${CI_SA_EMAIL}" \
   --role="roles/artifactregistry.writer"
 # deploy Cloud Run, and act as the API runtime SA while doing so
-gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+retry gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${CI_SA_EMAIL}" \
   --role="roles/run.admin" --condition=None
-gcloud iam service-accounts add-iam-policy-binding "$API_SA_EMAIL" \
+retry gcloud iam service-accounts add-iam-policy-binding "$API_SA_EMAIL" \
   --member="serviceAccount:${CI_SA_EMAIL}" \
   --role="roles/iam.serviceAccountUser"
 
@@ -98,7 +132,7 @@ if ! gcloud secrets describe api-tokens >/dev/null 2>&1; then
   echo "    printf 'tok_xxx:alice' | gcloud secrets versions add api-tokens --data-file=-"
 fi
 # the Cloud Run service (running as the API SA) reads this at startup
-gcloud secrets add-iam-policy-binding api-tokens \
+retry gcloud secrets add-iam-policy-binding api-tokens \
   --member="serviceAccount:${API_SA_EMAIL}" \
   --role="roles/secretmanager.secretAccessor"
 
@@ -114,7 +148,7 @@ gcloud iam workload-identity-pools providers create-oidc "$PROVIDER" \
   --attribute-condition="assertion.repository=='${GITHUB_REPO}'" \
   || echo "  provider already exists"
 # only this repo may impersonate the CI service account
-gcloud iam service-accounts add-iam-policy-binding "$CI_SA_EMAIL" \
+retry gcloud iam service-accounts add-iam-policy-binding "$CI_SA_EMAIL" \
   --role="roles/iam.workloadIdentityUser" \
   --member="principalSet://iam.googleapis.com/projects/${PROJECT_NUMBER}/locations/global/workloadIdentityPools/${POOL}/attribute.repository/${GITHUB_REPO}"
 
